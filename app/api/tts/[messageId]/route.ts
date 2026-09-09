@@ -30,7 +30,7 @@ export async function GET(
   }
 
   const voice = await getVoiceForAuthor(message.authorId);
-  const text = `${message.authorName} says: ${message.content}`;
+  const text = `${message.content}`;
 
   try {
     const audio = await synthesize(text, voice.voiceId);
