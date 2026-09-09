@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const MAX_MESSAGE_AGE_MS = 10 * 60 * 1000;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ messageId: string }> },
 ) {
   if (!process.env.ELEVENLABS_API_KEY || !process.env.ELEVENLABS_DEFAULT_VOICE_ID) {
@@ -16,6 +16,8 @@ export async function GET(
   }
 
   const { messageId } = await context.params;
+  const { searchParams } = new URL(request.url);
+  const isReplay = searchParams.get("replay") === "1";
   const message = await getMessageById(messageId);
 
   if (!message) {
@@ -23,7 +25,7 @@ export async function GET(
   }
 
   const ageMs = Date.now() - message.createdAt.getTime();
-  if (ageMs > MAX_MESSAGE_AGE_MS) {
+  if (!isReplay && ageMs > MAX_MESSAGE_AGE_MS) {
     return new Response("Message is too old for TTS", { status: 410 });
   }
 

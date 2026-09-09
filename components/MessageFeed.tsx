@@ -25,14 +25,16 @@ export function MessageFeed({ initialMessages }: MessageFeedProps) {
     () => new Set(initialMessages.map((message) => message.id)),
     [initialMessages],
   );
-  const seenLiveMessageIdsRef = useRef(new Set(initialMessageIds));
+  const seenLiveMessageIdsRef = useRef(new Set<string>());
   const {
     enabled,
     muted,
     isPlaying,
+    lastError,
     enableReadAloud,
     setMuted,
     enqueue,
+    replayMessage,
   } = useSpeechQueue();
 
   const messageIds = useMemo(
@@ -72,10 +74,11 @@ export function MessageFeed({ initialMessages }: MessageFeedProps) {
           return [message, ...current];
         });
 
-        if (
+        const isNewLiveMessage =
           !initialMessageIds.has(message.id) &&
-          !seenLiveMessageIdsRef.current.has(message.id)
-        ) {
+          !seenLiveMessageIdsRef.current.has(message.id);
+
+        if (isNewLiveMessage) {
           seenLiveMessageIdsRef.current.add(message.id);
           enqueue(message.id);
         }
@@ -123,7 +126,7 @@ export function MessageFeed({ initialMessages }: MessageFeedProps) {
           {!enabled ? (
             <button
               type="button"
-              onClick={enableReadAloud}
+              onClick={() => void enableReadAloud()}
               className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
             >
               Enable read-aloud
@@ -157,6 +160,12 @@ export function MessageFeed({ initialMessages }: MessageFeedProps) {
           </p>
         </div>
 
+        {lastError ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+            {lastError}
+          </p>
+        ) : null}
+
         <p className="text-xs text-zinc-500">
           Discord users can choose their voice with{" "}
           <code className="font-mono">/setvoice</code>. New authors use the
@@ -185,12 +194,22 @@ export function MessageFeed({ initialMessages }: MessageFeedProps) {
                 <p className="font-medium text-zinc-900 dark:text-zinc-100">
                   {message.authorName}
                 </p>
-                <time
-                  className="text-xs text-zinc-500"
-                  dateTime={message.createdAt}
-                >
-                  {formatTimestamp(message.createdAt)}
-                </time>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void replayMessage(message.id)}
+                    className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                    aria-label={`Replay message from ${message.authorName}`}
+                  >
+                    Replay
+                  </button>
+                  <time
+                    className="text-xs text-zinc-500"
+                    dateTime={message.createdAt}
+                  >
+                    {formatTimestamp(message.createdAt)}
+                  </time>
+                </div>
               </div>
               <p className="whitespace-pre-wrap break-words text-zinc-700 dark:text-zinc-300">
                 {message.content}
