@@ -1,4 +1,4 @@
-import { desc, gt, lt } from "drizzle-orm";
+import { desc, eq, gt, lt } from "drizzle-orm";
 
 import { getDb } from "@/lib/db";
 import { messages, type Message } from "@/lib/db/schema";
@@ -6,6 +6,7 @@ import { messages, type Message } from "@/lib/db/schema";
 export type MessageItem = {
   id: string;
   content: string;
+  authorId: string;
   authorName: string;
   createdAt: string;
 };
@@ -14,9 +15,21 @@ export function toMessageItem(message: Message): MessageItem {
   return {
     id: message.id,
     content: message.content,
+    authorId: message.authorId,
     authorName: message.authorName,
     createdAt: message.createdAt.toISOString(),
   };
+}
+
+export async function getMessageById(id: string): Promise<Message | null> {
+  const db = getDb();
+  const [message] = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.id, id))
+    .limit(1);
+
+  return message ?? null;
 }
 
 export async function insertMessage(data: {

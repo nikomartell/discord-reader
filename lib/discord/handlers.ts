@@ -3,9 +3,30 @@ import {
   InteractionResponseType,
   InteractionType,
 } from "discord-interactions";
-import type { APIChatInputApplicationCommandInteraction } from "discord-api-types/v10";
+import type {
+  APIApplicationCommandAutocompleteInteraction,
+  APIChatInputApplicationCommandInteraction,
+} from "discord-api-types/v10";
 
 import { insertMessage } from "@/lib/messages";
+import {
+  getVoiceForAuthor,
+  resolveVoiceChoice,
+  searchVoices,
+  setVoicePreference,
+} from "@/lib/voices";
+function ephemeral(content: string) {
+  return Response.json(
+    {
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content,
+        flags: InteractionResponseFlags.EPHEMERAL,
+      },
+    },
+    { status: 200 },
+  );
+}
 
 function getStringOption(
   interaction: APIChatInputApplicationCommandInteraction,
@@ -18,6 +39,12 @@ function getStringOption(
   return option && "value" in option ? String(option.value) : null;
 }
 
+function getInvokingUser(
+  interaction: APIChatInputApplicationCommandInteraction,
+) {
+  return interaction.member?.user ?? interaction.user;
+}
+
 function sanitizeContent(content: string): string {
   return content
     .replace(/@everyone/gi, "@\u200beveryone")
@@ -25,65 +52,25 @@ function sanitizeContent(content: string): string {
     .trim();
 }
 
-export async function handleApplicationCommand(
+async function handlePostCommand(
   interaction: APIChatInputApplicationCommandInteraction,
 ) {
-  if (interaction.data.name !== "post") {
-    return Response.json(
-      {
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: "Unknown command.",
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      },
-      { status: 200 },
-    );
-  }
-
   const rawMessage = getStringOption(interaction, "message");
 
   if (!rawMessage) {
-    return Response.json(
-      {
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: "Please provide a message to post.",
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      },
-      { status: 200 },
-    );
+    return ephemeral("Please provide a message to post.");
   }
 
   const content = sanitizeContent(rawMessage);
 
   if (!content) {
-    return Response.json(
-      {
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: "Message cannot be empty.",
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      },
-      { status: 200 },
-    );
+    return ephemeral("Message cannot be empty.");
   }
 
-  const author = interaction.member?.user ?? interaction.user;
+  const author = getInvokingUser(interaction);
 
   if (!author) {
-    return Response.json(
-      {
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: "Could not identify the author for this message.",
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      },
-      { status: 200 },
-    );
+    return ephemeral("Could not identify the author for this message.");
   }
 
   await insertMessage({
@@ -94,16 +81,110 @@ export async function handleApplicationCommand(
     channelId: interaction.channel?.id ?? interaction.channel_id ?? null,
   });
 
-  return Response.json(
-    {
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: "Posted to the feed!",
-        flags: InteractionResponseFlags.EPHEMERAL,
-      },
-    },
-    { status: 200 },
+  return ephemeral("Posted to the feed!");
+}
+
+async function handleSetVoiceCommand(
+  interaction: APIChatInputApplicationCommandInteraction,
+) {
+  const voiceId = getStringOption(interaction, "voice");
+  const user = getInvokingUser(interaction);
+
+  if (!user) {
+    return ephemeral("Could not identify your Discord account.");
+  }
+
+  if (!voiceId) {
+    return ephemeral("Please choose a voice.");
+  }
+
+  const voice = await resolveVoiceChoice(voiceId);
+
+  if (!voice) {
+    return ephemeral("That voice is no longer available. Try searching again.");
+  }
+
+  await setVoicePreference(user.id, voice.voiceId, voice.name);
+
+  return ephemeral(`Your voice is now **${voice.name}**.`);
+}
+
+async function handleVoiceCommand(
+  interaction: APIChatInputApplicationCommandInteraction,
+) {
+  const user = getInvokingUser(interaction);
+
+  if (!user) {
+    return ephemeral("Could not identify your Discord account.");
+  }
+
+  const voice = await getVoiceForAuthor(user.id);
+
+  if (voice.isDefault) {
+    return ephemeral(
+      `Using default voice (**${voice.voiceName}**). Run \`/setvoice\` to change it.`,
+    );
+  }
+
+  return ephemeral(`Your current voice is **${voice.voiceName}**.`);
+}
+
+async function handleAutocomplete(
+  interaction: APIApplicationCommandAutocompleteInteraction,
+) {
+  if (interaction.data.name !== "setvoice") {
+    return Response.json({ type: InteractionResponseType.PONG });
+  }
+
+  const focusedOption = interaction.data.options.find(
+    (option) => "focused" in option && option.focused === true,
   );
+
+  if (!focusedOption || focusedOption.name !== "voice") {
+    return Response.json({
+      type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
+      data: { choices: [] },
+    });
+  }
+
+  const query =
+    focusedOption.type === 3 && "value" in focusedOption
+      ? String(focusedOption.value)
+      : "";
+
+  try {
+    const voices = await searchVoices(query);
+    const choices = voices.slice(0, 25).map((voice) => ({
+      name: voice.name.slice(0, 100),
+      value: voice.voiceId,
+    }));
+
+    return Response.json({
+      type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
+      data: { choices },
+    });
+  } catch (error) {
+    console.error("Voice autocomplete failed:", error);
+    return Response.json({
+      type: InteractionResponseType.APPLICATION_COMMAND_AUTOCOMPLETE_RESULT,
+      data: { choices: [] },
+    });
+  }
+}
+
+export async function handleApplicationCommand(
+  interaction: APIChatInputApplicationCommandInteraction,
+) {
+  switch (interaction.data.name) {
+    case "post":
+      return handlePostCommand(interaction);
+    case "setvoice":
+      return handleSetVoiceCommand(interaction);
+    case "voice":
+      return handleVoiceCommand(interaction);
+    default:
+      return ephemeral("Unknown command.");
+  }
 }
 
 export async function handleInteraction(body: string) {
@@ -111,6 +192,12 @@ export async function handleInteraction(body: string) {
 
   if (interaction.type === InteractionType.PING) {
     return Response.json({ type: InteractionResponseType.PONG });
+  }
+
+  if (interaction.type === InteractionType.APPLICATION_COMMAND_AUTOCOMPLETE) {
+    return handleAutocomplete(
+      JSON.parse(body) as APIApplicationCommandAutocompleteInteraction,
+    );
   }
 
   if (interaction.type === InteractionType.APPLICATION_COMMAND) {

@@ -8,6 +8,7 @@ A Next.js app hosted on Vercel that receives Discord slash commands over HTTP, s
 2. Discord sends a signed HTTP request to `/api/discord/interactions`.
 3. The app verifies the signature, stores the message in Postgres, and replies ephemerally in Discord.
 4. The website subscribes to `/api/messages/stream` and shows new messages within a few seconds.
+5. Open tabs with **Enable read-aloud** turned on fetch ElevenLabs audio and play new messages aloud in each author's chosen voice.
 
 This project uses Discord's **Interactions Endpoint URL** instead of a persistent Gateway WebSocket, which makes it compatible with Vercel serverless functions.
 
@@ -49,6 +50,10 @@ cp .env.example .env.local
 | `DISCORD_PUBLIC_KEY` | Discord application public key |
 | `DISCORD_BOT_TOKEN` | Discord bot token |
 | `DATABASE_URL` | Neon Postgres connection string |
+| `ELEVENLABS_API_KEY` | ElevenLabs API key for server-side TTS |
+| `ELEVENLABS_DEFAULT_VOICE_ID` | Default ElevenLabs voice for authors without a preference |
+| `ELEVENLABS_DEFAULT_VOICE_NAME` | Optional display name for the default voice |
+| `ELEVENLABS_MODEL_ID` | Optional ElevenLabs model (default: `eleven_turbo_v2_5`) |
 
 If you use Vercel Marketplace for Neon:
 
@@ -110,14 +115,34 @@ npm run register-commands
 | `/api/discord/interactions` | POST | Discord webhook for slash commands |
 | `/api/messages` | GET | Paginated public message feed |
 | `/api/messages/stream` | GET | Server-Sent Events stream for live updates |
+| `/api/tts/[messageId]` | GET | ElevenLabs audio for a stored message |
 
-## Slash Command
+## Slash Commands
 
 ```
 /post message:<text>
 ```
 
 Posts a message to the public website feed. The Discord confirmation is ephemeral, so only the poster sees it in Discord.
+
+```
+/setvoice voice:<search>
+```
+
+Sets the ElevenLabs voice used when your messages are read aloud on the website. Use autocomplete to search available voices.
+
+```
+/voice
+```
+
+Shows your current read-aloud voice preference, or reports that you are using the default voice.
+
+## Read-Aloud on the Website
+
+1. Open the website and click **Enable read-aloud** once per browser session.
+2. When a new message arrives over SSE, the browser requests `/api/tts/{messageId}` and plays the audio.
+3. Each Discord author can choose a different voice with `/setvoice`.
+4. Authors who have never run `/setvoice` use `ELEVENLABS_DEFAULT_VOICE_ID`.
 
 ## Scripts
 
