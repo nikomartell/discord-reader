@@ -80,6 +80,16 @@ export async function touchLastMessageSeen(guildId: string, seenAt: Date) {
     .where(eq(voiceSessions.guildId, guildId));
 }
 
+export async function getMessageById(messageId: string) {
+  const rows = await getDb()
+    .select()
+    .from(messages)
+    .where(eq(messages.id, messageId))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
 export async function getMessagesSinceForGuild(guildId: string, since: Date) {
   return getDb()
     .select()

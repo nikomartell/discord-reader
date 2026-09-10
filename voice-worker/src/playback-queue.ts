@@ -14,27 +14,35 @@ import { fetchTtsAudio } from "./tts-client.js";
 type GuildQueue = {
   player: AudioPlayer;
   queue: string[];
+  handledIds: Set<string>;
   playing: boolean;
 };
 
 export class PlaybackQueueManager {
   private readonly queues = new Map<string, GuildQueue>();
 
-  enqueue(guildId: string, connection: VoiceConnection, messageId: string) {
+  enqueue(
+    guildId: string,
+    connection: VoiceConnection,
+    messageId: string,
+  ): boolean {
     let queue = this.queues.get(guildId);
 
     if (!queue) {
       const player = createAudioPlayer();
       connection.subscribe(player);
-      queue = { player, queue: [], playing: false };
+      queue = { player, queue: [], handledIds: new Set(), playing: false };
       this.queues.set(guildId, queue);
     }
 
-    if (!queue.queue.includes(messageId)) {
-      queue.queue.push(messageId);
+    if (queue.handledIds.has(messageId)) {
+      return false;
     }
 
+    queue.handledIds.add(messageId);
+    queue.queue.push(messageId);
     void this.processQueue(guildId);
+    return true;
   }
 
   clear(guildId: string) {

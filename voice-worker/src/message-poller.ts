@@ -44,9 +44,13 @@ export function startMessagePoller(
           }
 
           seenMessageIds.add(message.id);
-          playback.enqueue(session.guildId, connection, message.id);
+          const enqueued = playback.enqueue(
+            session.guildId,
+            connection,
+            message.id,
+          );
 
-          if (message.createdAt > latestSeen) {
+          if (enqueued && message.createdAt > latestSeen) {
             latestSeen = message.createdAt;
           }
         }

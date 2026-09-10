@@ -1,5 +1,6 @@
 import http from "node:http";
 
+import { getMessageById, touchLastMessageSeen } from "./db.js";
 import type { PlaybackQueueManager } from "./playback-queue.js";
 import type { SessionManager } from "./session-manager.js";
 
@@ -79,7 +80,18 @@ export function createHttpServer(
 
         const connection = sessions.getConnection(body.guildId);
         if (connection) {
-          playback.enqueue(body.guildId, connection, body.messageId);
+          const enqueued = playback.enqueue(
+            body.guildId,
+            connection,
+            body.messageId,
+          );
+
+          if (enqueued) {
+            const message = await getMessageById(body.messageId);
+            if (message?.createdAt) {
+              await touchLastMessageSeen(body.guildId, message.createdAt);
+            }
+          }
         }
 
         sendJson(response, 202, { ok: true });
