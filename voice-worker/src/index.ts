@@ -1,5 +1,3 @@
-import sodium from "libsodium-wrappers";
-
 import { createHttpServer } from "./http-server.js";
 import { createGateway } from "./gateway.js";
 import { startMessagePoller } from "./message-poller.js";
@@ -7,8 +5,6 @@ import { PlaybackQueueManager } from "./playback-queue.js";
 import { createSessionManager } from "./session-manager.js";
 
 async function main() {
-  await sodium.ready;
-
   const gateway = createGateway();
   const playback = new PlaybackQueueManager();
   const sessions = createSessionManager(gateway, playback);
