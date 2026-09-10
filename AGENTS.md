@@ -20,7 +20,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - discord-reader is a Next.js App Router app on Vercel using Discord HTTP Interactions (not Gateway WebSocket) because serverless has no persistent process
 - Data layer is Neon Postgres via Vercel Marketplace with Drizzle ORM and lazy `getDb()` initialization (no Proxy wrapper)
 - Public website feed uses SSE (`GET /api/messages/stream`) polling Postgres every ~3s; no website auth
-- Discord slash commands: `/post` (publish to feed), `/setvoice` (ElevenLabs voice autocomplete), `/voice` (show preference)
+- Discord slash commands: `/post` (publish to feed), `/setvoice` (ElevenLabs voice autocomplete), `/voice` (show preference), `/join` (voice channel read-aloud), `/leave` (disconnect voice)
+- Voice channel read-aloud uses a hybrid-lite architecture: Vercel handles interactions/TTS; an always-on voice worker on Railway holds the Discord Gateway connection (`voice-worker/`)
 - ElevenLabs TTS is server-side only (`GET /api/tts/[messageId]`); browser read-aloud requires user to click Enable read-aloud
 - Per-author voice preferences stored in `user_voice_preferences`; new authors use `ELEVENLABS_DEFAULT_VOICE_ID`
 - Register slash commands with `npm run register-commands -- --guild=GUILD_ID` for dev (instant) or globally for production

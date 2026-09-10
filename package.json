@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:push": "dotenv -e .env.local -- drizzle-kit push",
-    "register-commands": "dotenv -e .env.local -- tsx scripts/register-commands.ts"
+    "register-commands": "dotenv -e .env.local -- tsx scripts/register-commands.ts",
+    "voice-worker:dev": "npm run dev --prefix voice-worker"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

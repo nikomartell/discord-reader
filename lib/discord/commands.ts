@@ -34,4 +34,30 @@ export const VOICE_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
   description: "Show your current read-aloud voice preference",
 };
 
-export const COMMANDS = [POST_COMMAND, SETVOICE_COMMAND, VOICE_COMMAND] as const;
+export const JOIN_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
+  name: "join",
+  description: "Join a voice channel and read /post messages aloud",
+  options: [
+    {
+      type: 7,
+      name: "channel",
+      description:
+        "Voice channel to join (defaults to your current voice channel)",
+      required: false,
+      channel_types: [2],
+    },
+  ],
+};
+
+export const LEAVE_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
+  name: "leave",
+  description: "Leave the voice channel and stop read-aloud",
+};
+
+export const COMMANDS = [
+  POST_COMMAND,
+  SETVOICE_COMMAND,
+  VOICE_COMMAND,
+  JOIN_COMMAND,
+  LEAVE_COMMAND,
+] as const;

@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import {
   InteractionResponseFlags,
   InteractionResponseType,
@@ -8,13 +9,21 @@ import type {
   APIChatInputApplicationCommandInteraction,
 } from "discord-api-types/v10";
 
+import { sendEphemeralFollowUp } from "@/lib/discord/follow-up";
+import {
+  notifyWorkerLeave,
+  notifyWorkerMessage,
+  requestWorkerJoin,
+} from "@/lib/discord/voice-worker";
 import { insertMessage } from "@/lib/messages";
+import { clearSession, upsertSession } from "@/lib/voice-sessions";
 import {
   getVoiceForAuthor,
   resolveVoiceChoice,
   searchVoices,
   setVoicePreference,
 } from "@/lib/voices";
+
 function ephemeral(content: string) {
   return Response.json(
     {
@@ -28,12 +37,29 @@ function ephemeral(content: string) {
   );
 }
 
+function deferred() {
+  return Response.json({
+    type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+  });
+}
+
 function getStringOption(
   interaction: APIChatInputApplicationCommandInteraction,
   name: string,
 ): string | null {
   const option = interaction.data.options?.find(
     (entry) => entry.name === name && entry.type === 3,
+  );
+
+  return option && "value" in option ? String(option.value) : null;
+}
+
+function getChannelOption(
+  interaction: APIChatInputApplicationCommandInteraction,
+  name: string,
+): string | null {
+  const option = interaction.data.options?.find(
+    (entry) => entry.name === name && entry.type === 7,
   );
 
   return option && "value" in option ? String(option.value) : null;
@@ -73,12 +99,17 @@ async function handlePostCommand(
     return ephemeral("Could not identify the author for this message.");
   }
 
-  await insertMessage({
+  const message = await insertMessage({
     content,
     authorId: author.id,
     authorName: author.global_name ?? author.username,
     guildId: interaction.guild_id ?? null,
     channelId: interaction.channel?.id ?? interaction.channel_id ?? null,
+  });
+
+  notifyWorkerMessage({
+    messageId: message.id,
+    guildId: interaction.guild_id ?? null,
   });
 
   return ephemeral("Posted to the feed!");
@@ -127,6 +158,72 @@ async function handleVoiceCommand(
   }
 
   return ephemeral(`Your current voice is **${voice.voiceName}**.`);
+}
+
+function handleJoinCommand(
+  interaction: APIChatInputApplicationCommandInteraction,
+) {
+  if (!interaction.guild_id) {
+    return ephemeral("/join can only be used in a server.");
+  }
+
+  const user = getInvokingUser(interaction);
+
+  if (!user) {
+    return ephemeral("Could not identify your Discord account.");
+  }
+
+  const guildId = interaction.guild_id;
+  const channelId = getChannelOption(interaction, "channel");
+
+  after(async () => {
+    try {
+      await upsertSession({
+        guildId,
+        voiceChannelId: channelId,
+        pendingUserId: channelId ? null : user.id,
+        requestedByUserId: user.id,
+        status: "pending",
+      });
+
+      const result = await requestWorkerJoin({
+        guildId,
+        channelId,
+        userId: user.id,
+      });
+
+      if (result.ok) {
+        const message = channelId
+          ? `Joined **${result.channelName}**.`
+          : `Joined your voice channel (**${result.channelName}**).`;
+        await sendEphemeralFollowUp(interaction, message);
+        return;
+      }
+
+      await sendEphemeralFollowUp(interaction, result.error);
+    } catch (error) {
+      console.error("Join command follow-up failed:", error);
+      await sendEphemeralFollowUp(
+        interaction,
+        "Could not reach voice service. Try again.",
+      );
+    }
+  });
+
+  return deferred();
+}
+
+async function handleLeaveCommand(
+  interaction: APIChatInputApplicationCommandInteraction,
+) {
+  if (!interaction.guild_id) {
+    return ephemeral("/leave can only be used in a server.");
+  }
+
+  await clearSession(interaction.guild_id);
+  notifyWorkerLeave({ guildId: interaction.guild_id });
+
+  return ephemeral("Left the voice channel.");
 }
 
 async function handleAutocomplete(
@@ -182,6 +279,10 @@ export async function handleApplicationCommand(
       return handleSetVoiceCommand(interaction);
     case "voice":
       return handleVoiceCommand(interaction);
+    case "join":
+      return handleJoinCommand(interaction);
+    case "leave":
+      return handleLeaveCommand(interaction);
     default:
       return ephemeral("Unknown command.");
   }

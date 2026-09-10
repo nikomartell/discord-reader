@@ -26,3 +26,18 @@ export const userVoicePreferences = pgTable("user_voice_preferences", {
 
 export type UserVoicePreference = typeof userVoicePreferences.$inferSelect;
 export type NewUserVoicePreference = typeof userVoicePreferences.$inferInsert;
+
+export const voiceSessions = pgTable("voice_sessions", {
+  guildId: text("guild_id").primaryKey(),
+  voiceChannelId: text("voice_channel_id"),
+  pendingUserId: text("pending_user_id"),
+  requestedByUserId: text("requested_by_user_id").notNull(),
+  status: text("status").notNull().default("pending"),
+  lastMessageSeenAt: timestamp("last_message_seen_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type VoiceSession = typeof voiceSessions.$inferSelect;
+export type NewVoiceSession = typeof voiceSessions.$inferInsert;

@@ -1,4 +1,4 @@
-import { desc, eq, gt, lt } from "drizzle-orm";
+import { and, desc, eq, gt, lt } from "drizzle-orm";
 
 import { getDb } from "@/lib/db";
 import { messages, type Message } from "@/lib/db/schema";
@@ -71,6 +71,22 @@ export async function getMessagesSince(since: Date): Promise<MessageItem[]> {
     .select()
     .from(messages)
     .where(gt(messages.createdAt, since))
+    .orderBy(messages.createdAt);
+
+  return rows.map(toMessageItem);
+}
+
+export async function getMessagesSinceForGuild(
+  guildId: string,
+  since: Date,
+): Promise<MessageItem[]> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(
+      and(eq(messages.guildId, guildId), gt(messages.createdAt, since)),
+    )
     .orderBy(messages.createdAt);
 
   return rows.map(toMessageItem);
