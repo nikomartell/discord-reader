@@ -27,9 +27,11 @@ export function createSessionManager(
   return {
     async joinGuild({ guildId, channelId, userId }) {
       try {
-        let targetChannelId = channelId;
+        let targetChannelId: string;
 
-        if (!targetChannelId) {
+        if (channelId) {
+          targetChannelId = channelId;
+        } else {
           const userChannel = gateway.resolveUserVoiceChannel(guildId, userId);
           if (!userChannel) {
             await updateSessionStatus(guildId, "error");
